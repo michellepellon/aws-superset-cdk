@@ -25,7 +25,7 @@ class DockerImage(Construct):
             self,
             "SupersetImage",
             directory=os.path.abspath(docker_dir),
-            platform=ecr_assets.Platform.LINUX_AMD64,
+            platform=ecr_assets.Platform.LINUX_ARM64,
         )
 
         self.container_image = ecs.ContainerImage.from_docker_image_asset(

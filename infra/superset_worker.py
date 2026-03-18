@@ -64,6 +64,10 @@ class SupersetWorkerService(Construct):
             "TaskDef",
             cpu=config.worker_cpu,
             memory_limit_mib=config.worker_memory_mib,
+            runtime_platform=ecs.RuntimePlatform(
+                cpu_architecture=ecs.CpuArchitecture.ARM64,
+                operating_system_family=ecs.OperatingSystemFamily.LINUX,
+            ),
         )
 
         task_definition.add_container(

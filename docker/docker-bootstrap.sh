@@ -13,6 +13,9 @@ set -euo pipefail
 
 ROLE="${SUPERSET_ROLE:-web}"
 
+# Activate the virtual environment (required for Superset 5.0+)
+. /app/.venv/bin/activate
+
 echo "[bootstrap] Starting Superset role: ${ROLE}"
 
 # ---------------------------------------------------------------------------
@@ -22,7 +25,7 @@ wait_for_db() {
     local retries=30
     local wait=5
     for i in $(seq 1 $retries); do
-        if python /app/db_ready.py 2>/dev/null; then
+        if python /app/db_ready.py; then
             echo "[bootstrap] Database is ready"
             return 0
         fi

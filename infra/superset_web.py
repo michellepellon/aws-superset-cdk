@@ -89,6 +89,10 @@ class SupersetWebService(Construct):
                 secrets=container_secrets,
             ),
             open_listener=False,
+            runtime_platform=ecs.RuntimePlatform(
+                cpu_architecture=ecs.CpuArchitecture.ARM64,
+                operating_system_family=ecs.OperatingSystemFamily.LINUX,
+            ),
             circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
             health_check_grace_period=Duration.seconds(120),
             propagate_tags=ecs.PropagatedTagSource.SERVICE,
