@@ -1,4 +1,4 @@
-FROM apache/superset:4.1.1
+FROM apache/superset:6.0.0
 
 USER root
 
@@ -7,7 +7,7 @@ USER root
 #   - redis/celery: async task queue
 #   - Authlib: Entra ID OIDC authentication
 #   - duckdb-engine: MotherDuck / DuckDB data source support
-RUN pip install --no-cache-dir \
+RUN . /app/.venv/bin/activate && uv pip install --no-cache \
     psycopg2-binary==2.9.10 \
     redis==5.2.1 \
     celery[redis]==5.4.0 \

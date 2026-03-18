@@ -64,6 +64,10 @@ class SupersetBeatService(Construct):
             "TaskDef",
             cpu=config.beat_cpu,
             memory_limit_mib=config.beat_memory_mib,
+            runtime_platform=ecs.RuntimePlatform(
+                cpu_architecture=ecs.CpuArchitecture.ARM64,
+                operating_system_family=ecs.OperatingSystemFamily.LINUX,
+            ),
         )
 
         task_definition.add_container(
