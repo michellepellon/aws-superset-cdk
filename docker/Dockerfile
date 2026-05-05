@@ -23,6 +23,7 @@ ENV SUPERSET_CONFIG_PATH=/app/superset_config.py
 COPY docker-bootstrap.sh /app/docker-bootstrap.sh
 COPY db_ready.py /app/db_ready.py
 COPY run_migrations.py /app/run_migrations.py
+COPY init_roles.py /app/init_roles.py
 RUN chmod +x /app/docker-bootstrap.sh
 
 USER superset

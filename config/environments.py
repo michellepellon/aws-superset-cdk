@@ -52,7 +52,7 @@ class EnvironmentConfig:
     entra_tenant_id: str | None = field(default=None)
     entra_client_id: str | None = field(default=None)
     # Superset role to assign to new Entra users on first login
-    entra_default_role: str = field(default="Gamma")
+    entra_default_role: str = field(default="Analyst")
 
 
 DEV = EnvironmentConfig(
