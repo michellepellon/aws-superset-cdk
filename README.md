@@ -95,11 +95,12 @@ Environment-specific configurations are defined in `config/environments.py`:
 
 **Prod Environment** (`env=prod`):
 - 2 NAT Gateways, 2 AZs
-- Aurora: 0.5-16 ACUs
-- Redis: cache.t4g.small (1 replica)
-- Web: 1024 CPU, 2048 MB (2-6 tasks)
-- Worker: 1024 CPU, 2048 MB (1-10 tasks, Spot)
+- Aurora: 1.0-16 ACUs
+- Redis: cache.t4g.medium (1 replica)
+- Web: 2048 CPU, 4096 MB (3-8 tasks, 6 gunicorn workers each)
+- Worker: 1024 CPU, 2048 MB (2-10 tasks, Spot)
 - 30-day database backup retention
+- Sized for 100-200 daily active users
 
 ### Microsoft Entra ID Authentication
 
