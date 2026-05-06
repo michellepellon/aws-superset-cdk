@@ -102,17 +102,27 @@ Environment-specific configurations are defined in `config/environments.py`:
 - 30-day database backup retention
 - Sized for 100-200 daily active users
 
-### Microsoft Entra ID Authentication
+### Deployment notes
 
-To enable Azure AD/Entra ID authentication:
+#### Do not pass `-c account=…` / `-c region=…` to `cdk deploy`
+
+The first deploy of `Superset-Prod` was env-agnostic (no account/region context), so its CloudFormation template uses the `Fn::GetAZs` intrinsic for subnet `AvailabilityZone`. Passing concrete `-c account=…` and `-c region=…` on subsequent deploys triggers a CDK AZ lookup that emits *literal* AZ names (e.g. `"us-east-2a"`) instead. Because `AvailabilityZone` is an immutable property, CloudFormation would **replace every subnet** — which cascades into Aurora downtime, NAT gateway recreation, and a new ALB DNS (breaking the Cloudflare CNAME).
+
+Use AWS profile / env vars (`AWS_PROFILE`, `AWS_REGION`) to set the deployment target instead. The standard prod deploy command is:
 
 ```bash
-cdk deploy -c env=dev \
-  -c account=YOUR_AWS_ACCOUNT_ID \
-  -c region=us-east-1 \
-  -c entra_tenant_id=YOUR_TENANT_ID \
-  -c entra_client_id=YOUR_CLIENT_ID
+cdk deploy -c env=prod --require-approval never Superset-Prod
 ```
+
+(Entra IDs come from `cdk.json` context, so they don't need to be on the CLI either.)
+
+`cdk bootstrap` is the only command where `-c account=` / `-c region=` is appropriate — it operates on the CDK toolkit stack, not on the application stack template.
+
+### Microsoft Entra ID Authentication
+
+The Entra tenant ID and client ID for this deployment live in `cdk.json` under `context.entra_tenant_id` / `context.entra_client_id`, so every `cdk deploy` picks them up automatically. To override them on a single run (e.g. testing a different tenant), pass `-c entra_tenant_id=… -c entra_client_id=…` — CLI context wins over `cdk.json`.
+
+To enable Entra in a fresh fork pointing at a different tenant, edit `cdk.json` and replace the two IDs (these are non-secret org/app identifiers; the actual client *secret* is in AWS Secrets Manager).
 
 Configure the client secret in AWS Secrets Manager after deployment (secret name: `superset-{env}-entra-client-secret`).
 

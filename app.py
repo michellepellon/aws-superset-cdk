@@ -34,6 +34,18 @@ if entra_client_id:
 if entra_overrides:
     config = replace(config, **entra_overrides)
 
+# NOTE: Do NOT pass `-c account=...` / `-c region=...` to `cdk deploy` or
+# `cdk diff` when targeting an existing stack. The original deploy was
+# env-agnostic (both context values absent), so the deployed CloudFormation
+# template uses `Fn::GetAZs` for subnet `AvailabilityZone`. Passing concrete
+# account+region triggers a CDK AZ lookup that emits literal AZ names
+# ("us-east-2a") in the new template. Since `AvailabilityZone` is an
+# immutable property, CloudFormation would REPLACE every subnet — which
+# cascades into Aurora downtime, NAT gateway recreation, and a new ALB DNS
+# (breaking the Cloudflare CNAME).
+#
+# To target a different AWS account or region, use AWS profile / env vars
+# (`AWS_PROFILE`, `AWS_REGION`) — not CDK context.
 SupersetStack(
     app,
     f"Superset-{config.env_name.capitalize()}",
