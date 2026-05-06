@@ -33,11 +33,14 @@ with engine.connect() as conn:
             # Build a Superset Flask app context to access the SecurityManager.
             # Imported here (not at module top) so subprocess `superset` calls
             # above run in their own clean process without inheriting state.
+            from superset import db
             from superset.app import create_app
 
             app = create_app()
             with app.app_context():
-                init_roles.ensure_analyst_role(app.appbuilder.sm)
+                init_roles.ensure_analyst_role(
+                    app.appbuilder.sm, db.session
+                )
             print("[bootstrap] Custom roles ensured")
         finally:
             conn.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": LOCK_ID})

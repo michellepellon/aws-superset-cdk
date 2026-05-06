@@ -14,6 +14,14 @@ sys.path.insert(0, str(_DOCKER_DIR))
 
 import init_roles  # noqa: E402
 
+# Constraining mocks with `spec=[...]` is intentional: it ensures that if
+# the function tries to access an attribute outside this allowlist, the
+# test fails. This catches the kind of API drift that previously slipped
+# past us in prod (`sm.get_session` not existing on real SecurityManagers).
+_SM_API = ["find_role", "add_role", "find_permission_view_menu"]
+_SESSION_API = ["merge", "commit"]
+_ROLE_API = ["permissions"]
+
 
 def _perm(permission_name: str, view_menu_name: str) -> MagicMock:
     """Build a mock PermissionView with the given names."""
@@ -23,18 +31,31 @@ def _perm(permission_name: str, view_menu_name: str) -> MagicMock:
     return pv
 
 
+def _make_role() -> MagicMock:
+    role = MagicMock(spec=_ROLE_API)
+    role.permissions = []
+    return role
+
+
+def _make_session() -> MagicMock:
+    return MagicMock(spec=_SESSION_API)
+
+
 def _make_sm(
     *,
     existing_role: MagicMock | None = None,
     gamma_perms: list[MagicMock] | None = None,
     all_database_access_pv: MagicMock | None = None,
     all_datasource_access_pv: MagicMock | None = None,
-) -> MagicMock:
-    """Build a SecurityManager mock with controllable lookups."""
-    sm = MagicMock()
+) -> tuple[MagicMock, MagicMock]:
+    """Build a SecurityManager mock with controllable lookups.
 
-    new_role = MagicMock()
-    new_role.permissions = []
+    Returns (sm, new_role) so tests can assert on the role that
+    ``add_role`` would have produced.
+    """
+    sm = MagicMock(spec=_SM_API)
+
+    new_role = _make_role()
     sm.add_role.return_value = new_role
 
     def find_role(name):
@@ -43,7 +64,7 @@ def _make_sm(
         if name == "Gamma":
             if gamma_perms is None:
                 return None
-            gamma = MagicMock()
+            gamma = _make_role()
             gamma.permissions = list(gamma_perms)
             return gamma
         return None
@@ -59,20 +80,19 @@ def _make_sm(
 
     sm.find_permission_view_menu.side_effect = find_pv
 
-    return sm
+    return sm, new_role
 
 
 class TestEnsureAnalystRole:
     def test_creates_role_when_missing(self):
-        sm = _make_sm()
-        init_roles.ensure_analyst_role(sm)
+        sm, _ = _make_sm()
+        init_roles.ensure_analyst_role(sm, _make_session())
         sm.add_role.assert_called_once_with("Analyst")
 
     def test_reuses_existing_role(self):
-        existing = MagicMock()
-        existing.permissions = []
-        sm = _make_sm(existing_role=existing)
-        init_roles.ensure_analyst_role(sm)
+        existing = _make_role()
+        sm, _ = _make_sm(existing_role=existing)
+        init_roles.ensure_analyst_role(sm, _make_session())
         sm.add_role.assert_not_called()
 
     def test_excludes_sql_lab_view_menu_permissions(self):
@@ -84,11 +104,9 @@ class TestEnsureAnalystRole:
             _perm("can_write", "Query"),
             _perm("can_write", "Chart"),
         ]
-        sm = _make_sm(gamma_perms=gamma_perms)
-        init_roles.ensure_analyst_role(sm)
-        view_menus = {
-            pv.view_menu.name for pv in sm.add_role.return_value.permissions
-        }
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        view_menus = {pv.view_menu.name for pv in new_role.permissions}
         assert "SQL Lab" not in view_menus
         assert "Query Search" not in view_menus
         assert "SavedQuery" not in view_menus
@@ -103,11 +121,9 @@ class TestEnsureAnalystRole:
             _perm("can_csv", "Superset"),  # Kept — also used by chart export
             _perm("can_read", "Dashboard"),
         ]
-        sm = _make_sm(gamma_perms=gamma_perms)
-        init_roles.ensure_analyst_role(sm)
-        perm_names = {
-            pv.permission.name for pv in sm.add_role.return_value.permissions
-        }
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        perm_names = {pv.permission.name for pv in new_role.permissions}
         assert "can_sqllab" not in perm_names
         assert "can_sql_json" not in perm_names
         assert "can_csv" in perm_names
@@ -116,63 +132,68 @@ class TestEnsureAnalystRole:
     def test_includes_all_database_and_datasource_access(self):
         db_pv = _perm("all_database_access", "all_database_access")
         ds_pv = _perm("all_datasource_access", "all_datasource_access")
-        sm = _make_sm(
+        sm, new_role = _make_sm(
             gamma_perms=[],
             all_database_access_pv=db_pv,
             all_datasource_access_pv=ds_pv,
         )
-        init_roles.ensure_analyst_role(sm)
-        permissions = sm.add_role.return_value.permissions
-        assert db_pv in permissions
-        assert ds_pv in permissions
+        init_roles.ensure_analyst_role(sm, _make_session())
+        assert db_pv in new_role.permissions
+        assert ds_pv in new_role.permissions
 
     def test_handles_missing_all_access_perms_gracefully(self):
-        sm = _make_sm(
+        sm, new_role = _make_sm(
             gamma_perms=[_perm("can_read", "Dashboard")],
             all_database_access_pv=None,
             all_datasource_access_pv=None,
         )
-        init_roles.ensure_analyst_role(sm)
-        permissions = sm.add_role.return_value.permissions
-        assert len(permissions) == 1
+        init_roles.ensure_analyst_role(sm, _make_session())
+        assert len(new_role.permissions) == 1
 
     def test_handles_missing_gamma_gracefully(self):
         db_pv = _perm("all_database_access", "all_database_access")
-        sm = _make_sm(
+        sm, new_role = _make_sm(
             gamma_perms=None,
             all_database_access_pv=db_pv,
         )
-        init_roles.ensure_analyst_role(sm)
-        permissions = sm.add_role.return_value.permissions
-        assert db_pv in permissions
+        init_roles.ensure_analyst_role(sm, _make_session())
+        assert db_pv in new_role.permissions
 
-    def test_commits_session(self):
-        sm = _make_sm()
-        init_roles.ensure_analyst_role(sm)
-        sm.get_session.commit.assert_called_once()
+    def test_merges_and_commits_session(self):
+        sm, new_role = _make_sm()
+        session = _make_session()
+        init_roles.ensure_analyst_role(sm, session)
+        session.merge.assert_called_once_with(new_role)
+        session.commit.assert_called_once()
 
     def test_custom_role_name(self):
-        sm = _make_sm()
-        init_roles.ensure_analyst_role(sm, role_name="Viewer")
+        sm, _ = _make_sm()
+        init_roles.ensure_analyst_role(sm, _make_session(), role_name="Viewer")
         sm.add_role.assert_called_once_with("Viewer")
 
     def test_does_not_duplicate_all_access_perms_when_in_gamma(self):
         db_pv = _perm("all_database_access", "all_database_access")
         ds_pv = _perm("all_datasource_access", "all_datasource_access")
-        sm = _make_sm(
+        sm, new_role = _make_sm(
             gamma_perms=[db_pv, ds_pv, _perm("can_read", "Dashboard")],
             all_database_access_pv=db_pv,
             all_datasource_access_pv=ds_pv,
         )
-        init_roles.ensure_analyst_role(sm)
-        permissions = sm.add_role.return_value.permissions
+        init_roles.ensure_analyst_role(sm, _make_session())
         # Each all_*_access perm appears exactly once
-        assert sum(1 for p in permissions if p is db_pv) == 1
-        assert sum(1 for p in permissions if p is ds_pv) == 1
+        assert sum(1 for p in new_role.permissions if p is db_pv) == 1
+        assert sum(1 for p in new_role.permissions if p is ds_pv) == 1
 
+    def test_session_must_provide_merge_and_commit(self):
+        """A session that lacks merge() should fail loudly, not silently."""
+        sm, _ = _make_sm()
+        broken_session = MagicMock(spec=["commit"])  # no merge
+        with pytest.raises(AttributeError):
+            init_roles.ensure_analyst_role(sm, broken_session)
 
-@pytest.fixture(autouse=True)
-def _reset_role_state():
-    """Each test gets a fresh mock, but ensure_analyst_role mutates role.permissions —
-    so make sure tests don't accidentally share state via class-level fixtures."""
-    yield
+    def test_security_manager_must_have_expected_api(self):
+        """If a future FAB version drops one of these methods, fail fast."""
+        broken_sm = MagicMock(spec=["find_role"])  # missing add_role
+        broken_sm.find_role.return_value = None
+        with pytest.raises(AttributeError):
+            init_roles.ensure_analyst_role(broken_sm, _make_session())

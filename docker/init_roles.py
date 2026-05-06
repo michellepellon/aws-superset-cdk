@@ -38,6 +38,7 @@ def _is_sql_lab_perm(pv) -> bool:
 
 def ensure_analyst_role(
     security_manager,
+    session,
     role_name: str = "Analyst",
     logger: logging.Logger | None = None,
 ) -> None:
@@ -46,6 +47,10 @@ def ensure_analyst_role(
     Args:
         security_manager: Superset's SecurityManager (typically
             ``app.appbuilder.sm``).
+        session: SQLAlchemy session for committing the permission
+            assignment (typically ``superset.db.session``). Passed
+            explicitly because ``BaseSecurityManager.get_session`` was
+            removed in newer Flask-AppBuilder versions.
         role_name: Name of the role to create/refresh. Defaults to
             "Analyst".
         logger: Optional logger; falls back to the module logger.
@@ -90,7 +95,10 @@ def ensure_analyst_role(
             permissions.append(pv)
 
     role.permissions = permissions
-    sm.get_session.commit()
+    # merge() reattaches the role if `add_role` ended its transaction,
+    # so the permission assignment actually persists.
+    session.merge(role)
+    session.commit()
     log.info(
         "Role %r persisted with %d permissions", role_name, len(permissions)
     )
