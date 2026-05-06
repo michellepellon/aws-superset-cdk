@@ -17,6 +17,8 @@
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws"],
     "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
-    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true
+    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
+    "entra_tenant_id": "55e68b68-ba31-47ab-a59a-7834d6ce6b8c",
+    "entra_client_id": "b7430676-22bd-4beb-ae0e-8d4efd47714a"
   }
 }
