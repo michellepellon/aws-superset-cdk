@@ -103,16 +103,57 @@ class TestEnsureAnalystRole:
             _perm("can_read", "SavedQuery"),
             _perm("can_write", "Query"),
             _perm("can_write", "Chart"),
+            # SQLLab (no space) is a separate Superset view-menu name used by
+            # can_estimate_query_cost and can_format_sql — must also be stripped.
+            _perm("can_estimate_query_cost", "SQLLab"),
+            _perm("can_format_sql", "SQLLab"),
         ]
         sm, new_role = _make_sm(gamma_perms=gamma_perms)
         init_roles.ensure_analyst_role(sm, _make_session())
         view_menus = {pv.view_menu.name for pv in new_role.permissions}
         assert "SQL Lab" not in view_menus
+        assert "SQLLab" not in view_menus
         assert "Query Search" not in view_menus
         assert "SavedQuery" not in view_menus
         assert "Query" not in view_menus
         assert "Dashboard" in view_menus
         assert "Chart" in view_menus
+
+    def test_excludes_tag_write_and_apply(self):
+        """Analysts can read tags but not create or apply them."""
+        gamma_perms = [
+            _perm("can_read", "Tag"),
+            _perm("can_write", "Tag"),
+            _perm("can_bulk_create", "Tag"),
+            _perm("can_tag", "Chart"),
+            _perm("can_tag", "Dashboard"),
+            _perm("can_read", "Dashboard"),
+        ]
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        pairs = {(pv.permission.name, pv.view_menu.name) for pv in new_role.permissions}
+        assert ("can_read", "Tag") in pairs  # kept
+        assert ("can_read", "Dashboard") in pairs  # kept
+        assert ("can_write", "Tag") not in pairs
+        assert ("can_bulk_create", "Tag") not in pairs
+        assert ("can_tag", "Chart") not in pairs
+        assert ("can_tag", "Dashboard") not in pairs
+
+    def test_excludes_theme_write_keeps_read_and_export(self):
+        """Analysts can use existing themes but not edit shared ones."""
+        gamma_perms = [
+            _perm("can_read", "Theme"),
+            _perm("can_export", "Theme"),
+            _perm("can_write", "Theme"),
+            _perm("menu_access", "Themes"),
+        ]
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        pairs = {(pv.permission.name, pv.view_menu.name) for pv in new_role.permissions}
+        assert ("can_read", "Theme") in pairs
+        assert ("can_export", "Theme") in pairs
+        assert ("menu_access", "Themes") in pairs
+        assert ("can_write", "Theme") not in pairs
 
     def test_excludes_sql_lab_action_permissions(self):
         gamma_perms = [
