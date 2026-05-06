@@ -52,7 +52,7 @@ class EnvironmentConfig:
     entra_tenant_id: str | None = field(default=None)
     entra_client_id: str | None = field(default=None)
     # Superset role to assign to new Entra users on first login
-    entra_default_role: str = field(default="Gamma")
+    entra_default_role: str = field(default="Analyst")
 
 
 DEV = EnvironmentConfig(
@@ -86,25 +86,25 @@ PROD = EnvironmentConfig(
     env_name="prod",
     nat_gateways=2,
     max_azs=2,
-    aurora_min_acu=0.5,
+    aurora_min_acu=1.0,
     aurora_max_acu=16,
     aurora_backup_retention_days=30,
-    redis_node_type="cache.t4g.small",
+    redis_node_type="cache.t4g.medium",
     redis_num_replicas=1,
     web_cpu=2048,
     web_memory_mib=4096,
     web_desired_count=2,
-    web_min_count=2,
-    web_max_count=6,
+    web_min_count=3,
+    web_max_count=8,
     worker_cpu=1024,
     worker_memory_mib=2048,
     worker_desired_count=2,
-    worker_min_count=1,
+    worker_min_count=2,
     worker_max_count=10,
     worker_spot=True,
     beat_cpu=256,
     beat_memory_mib=512,
-    gunicorn_workers=5,
+    gunicorn_workers=6,
     gunicorn_timeout=120,
     removal_destroy=False,
 )

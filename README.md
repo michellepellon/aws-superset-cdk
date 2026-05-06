@@ -95,11 +95,12 @@ Environment-specific configurations are defined in `config/environments.py`:
 
 **Prod Environment** (`env=prod`):
 - 2 NAT Gateways, 2 AZs
-- Aurora: 0.5-16 ACUs
-- Redis: cache.t4g.small (1 replica)
-- Web: 1024 CPU, 2048 MB (2-6 tasks)
-- Worker: 1024 CPU, 2048 MB (1-10 tasks, Spot)
+- Aurora: 1.0-16 ACUs
+- Redis: cache.t4g.medium (1 replica)
+- Web: 2048 CPU, 4096 MB (3-8 tasks, 6 gunicorn workers each)
+- Worker: 1024 CPU, 2048 MB (2-10 tasks, Spot)
 - 30-day database backup retention
+- Sized for 100-200 daily active users
 
 ### Microsoft Entra ID Authentication
 
@@ -114,6 +115,40 @@ cdk deploy -c env=dev \
 ```
 
 Configure the client secret in AWS Secrets Manager after deployment (secret name: `superset-{env}-entra-client-secret`).
+
+#### Just-in-time provisioning
+
+When Entra is enabled, new users are auto-provisioned in Superset on first login (`AUTH_USER_REGISTRATION = True` in `docker/superset_config.py`). The role assigned to new users is controlled by `entra_default_role` on `EnvironmentConfig`, which defaults to **`Analyst`** — a custom role created automatically by `docker/init_roles.py` during migrations.
+
+The Analyst role is built by:
+1. Copying the stock `Gamma` role's permissions
+2. Removing all SQL Lab perms (no raw SQL writing)
+3. Adding `all_database_access` and `all_datasource_access` so users automatically see every database an admin connects post-deploy
+
+Net effect: an Analyst can view org dashboards, build their own personal charts/dashboards via the Explore UI on any connected database, and cannot edit dashboards they don't own (enforced by `DASHBOARD_RBAC`, which is enabled).
+
+#### Post-deploy steps for Entra
+
+After the first deploy with `entra_*` context:
+
+1. **Rotate the placeholder client secret.** CDK creates `superset-{env}-entra-client-secret` with the literal value `REPLACE_ME_WITH_ENTRA_CLIENT_SECRET`. Update it with the secret from your Entra app registration:
+   ```bash
+   aws secretsmanager update-secret \
+     --secret-id superset-dev-entra-client-secret \
+     --secret-string 'YOUR_REAL_ENTRA_CLIENT_SECRET'
+   ```
+   Then force a new ECS deployment so containers pick up the new value:
+   ```bash
+   aws ecs update-service --cluster superset-dev --service superset-web-dev --force-new-deployment
+   ```
+
+2. **Configure the Entra app callback URL.** In your Azure portal, set the redirect URI on the app registration to:
+   ```
+   https://<your-public-hostname>/oauth-authorized/azure
+   ```
+   This must match the public hostname users hit (Cloudflare-fronted), not the raw ALB DNS.
+
+3. **Connect at least one database.** Log in as Admin (`superset fab create-admin` via `aws ecs run-task`) and add a database connection through *Settings → Database Connections*. The Analyst role's `all_database_access` automatically picks it up — no per-role grant needed.
 
 ## Infrastructure Components
 
