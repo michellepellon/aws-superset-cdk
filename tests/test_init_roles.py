@@ -155,6 +155,65 @@ class TestEnsureAnalystRole:
         assert ("menu_access", "Themes") in pairs
         assert ("can_write", "Theme") not in pairs
 
+    def test_excludes_user_registrations_endpoints(self):
+        """Strip the entire UserRegistrationsRestAPI / View view-menus.
+
+        FAB registers /api/v1/security/user_registrations/* when
+        AUTH_USER_REGISTRATION=True (required for OAuth JIT). The OAuth flow
+        bypasses this mechanism, so Analysts should not be able to call it.
+        """
+        gamma_perms = [
+            _perm("can_add", "UserRegistrationsRestAPI"),
+            _perm("can_delete", "UserRegistrationsRestAPI"),
+            _perm("can_edit", "UserRegistrationsRestAPI"),
+            _perm("can_list", "UserRegistrationsRestAPI"),
+            _perm("can_show", "UserRegistrationsRestAPI"),
+            _perm("can_list", "UserRegistrationsView"),
+            _perm("can_read", "Dashboard"),
+        ]
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        view_menus = {pv.view_menu.name for pv in new_role.permissions}
+        assert "UserRegistrationsRestAPI" not in view_menus
+        assert "UserRegistrationsView" not in view_menus
+        assert "Dashboard" in view_menus
+
+    def test_excludes_cache_invalidation(self):
+        gamma_perms = [
+            _perm("can_invalidate", "CacheRestApi"),
+            _perm("can_read", "Dashboard"),
+        ]
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        pairs = {(pv.permission.name, pv.view_menu.name) for pv in new_role.permissions}
+        assert ("can_invalidate", "CacheRestApi") not in pairs
+
+    def test_excludes_rls_read(self):
+        """RLS rule clauses can leak filter logic — strip read access."""
+        gamma_perms = [
+            _perm("can_read", "RowLevelSecurity"),
+            _perm("can_read", "Dashboard"),
+        ]
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        pairs = {(pv.permission.name, pv.view_menu.name) for pv in new_role.permissions}
+        assert ("can_read", "RowLevelSecurity") not in pairs
+        assert ("can_read", "Dashboard") in pairs
+
+    def test_excludes_embedded_delete(self):
+        gamma_perms = [
+            _perm("can_delete_embedded", "Dashboard"),
+            _perm("can_get_embedded", "Dashboard"),
+            _perm("can_read", "Dashboard"),
+        ]
+        sm, new_role = _make_sm(gamma_perms=gamma_perms)
+        init_roles.ensure_analyst_role(sm, _make_session())
+        pairs = {(pv.permission.name, pv.view_menu.name) for pv in new_role.permissions}
+        assert ("can_delete_embedded", "Dashboard") not in pairs
+        # Read still works (Analysts can view embedded dashboards)
+        assert ("can_get_embedded", "Dashboard") in pairs
+        assert ("can_read", "Dashboard") in pairs
+
     def test_excludes_sql_lab_action_permissions(self):
         gamma_perms = [
             _perm("can_sqllab", "Superset"),
