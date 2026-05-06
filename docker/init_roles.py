@@ -15,11 +15,17 @@ than hardcoding a perm list.
 
 import logging
 
-# View-menu names whose permissions are stripped entirely. These cover SQL
-# Lab access (Superset uses both "SQL Lab" with a space and "SQLLab" without
-# in different perms) plus query-related sub-menus.
+# View-menu names whose permissions are stripped entirely. These cover:
+#   - SQL Lab access (Superset uses both "SQL Lab" with a space and "SQLLab"
+#     without in different perms)
+#   - Query-related sub-menus
+#   - User self-registration management (FAB still registers these endpoints
+#     when AUTH_USER_REGISTRATION=True, even though OAuth bypasses the flow)
 _EXCLUDED_VIEW_MENUS = frozenset(
-    {"SQL Lab", "SQLLab", "Query Search", "SavedQuery", "Query"}
+    {
+        "SQL Lab", "SQLLab", "Query Search", "SavedQuery", "Query",
+        "UserRegistrationsRestAPI", "UserRegistrationsView",
+    }
 )
 
 # Action-level permission names that gate raw SQL execution regardless of
@@ -40,6 +46,15 @@ _EXCLUDED_PERM_PAIRS = frozenset({
     # Theme write — Analysts shouldn't edit shared dashboard themes.
     # Read/export access to existing themes is preserved.
     ("can_write", "Theme"),
+    # Cache invalidation — no legitimate Analyst use case; could be abused
+    # to force expensive re-renders against the data warehouse.
+    ("can_invalidate", "CacheRestApi"),
+    # Row-level security rule read access — RLS clauses can contain raw SQL
+    # WHERE fragments that leak filter logic or hardcoded IDs.
+    ("can_read", "RowLevelSecurity"),
+    # Embedded dashboard token deletion — Analysts don't manage embeddings.
+    # The endpoint is owner-filtered, so this is defense-in-depth.
+    ("can_delete_embedded", "Dashboard"),
 })
 
 
