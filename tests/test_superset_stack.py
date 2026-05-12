@@ -94,8 +94,8 @@ class TestProdStack:
             "AWS::RDS::DBCluster",
             {
                 "ServerlessV2ScalingConfiguration": {
-                    "MinCapacity": 1.0,
-                    "MaxCapacity": 16,
+                    "MinCapacity": 2.0,
+                    "MaxCapacity": 32,
                 },
                 "DeletionProtection": True,
             },
@@ -105,7 +105,7 @@ class TestProdStack:
         template = _synth_stack(PROD)
         template.has_resource_properties(
             "AWS::ElastiCache::ReplicationGroup",
-            {"CacheNodeType": "cache.t4g.medium"},
+            {"CacheNodeType": "cache.m7g.large"},
         )
 
 
